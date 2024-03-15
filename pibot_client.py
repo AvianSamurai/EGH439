@@ -212,7 +212,7 @@ class PiBot(object):
             print('Timed out attempting to communicate with {}:{}'.format(self.localiser_ip, self.localiser_port), file=sys.stderr)
             return None
 
-    def getLocalizerPose(self, group_number = 0):
+    def getLocalizerPose(self, group_number):
         if self.localiser_endpoint is None:
             print('No localiser endpoint specified')
             return None
