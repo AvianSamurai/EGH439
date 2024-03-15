@@ -20,7 +20,7 @@ RIGHT_ENC = 200;
 TRIGGER_DIST = 0.15;
 ROBOT_V = 50;
 TURN_GAIN = 30;
-POSE_TURN_GAIN = 30;
+POSE_TURN_GAIN = -10;
 
 # Limit settings
 MIN_LIM = 0.15;
@@ -30,7 +30,7 @@ MAX_LIM = 1.85;
 RUN_COUNT = 2500; # 0 for off
 SHOW_FINAL_GRAPH = True;
 SHOW_TURN_GRAPH = True;
-SHOW_MOTOR_COMMANDS = False;
+SHOW_MOTOR_COMMANDS = True;
 
 # Debug variables
 past_positions_x = [];
@@ -101,31 +101,31 @@ def GoToPosition(x, y, t):
                     [np.sin(bot_t),    np.cos(bot_t), pose[1]],
                     [0,                    0,                  1   ]], 
                 dtype=np.float64)
-    waypoint_pos = np.linalg.inv(T_WR) @ np.array([x, y, 1], dtype=np.float64);
+    waypoint_pos = np.linalg.inv(T_WR) @ np.array([x, y, t], dtype=np.float64);
 
-    a = np.arctan2(waypoint_pos[1], waypoint_pos[0]) - waypoint_pos[2];
-    b = -waypoint_pos[2] - a;
+    a = np.arctan2(waypoint_pos[1], waypoint_pos[0]);
+    b = -bot_t - t;
 
     # Work out angle from front of robot to waypoint, wrap it to range [-90, 90]
     turn_rate = (a / np.pi) * TURN_GAIN + (b / np.pi) * POSE_TURN_GAIN;
-    #if(waypoint_pos[0] < 0):
-    #    turn_rate = -turn_rate;
-    turn_rate = (np.arctan2(waypoint_pos[1], waypoint_pos[0]) / np.pi) * TURN_GAIN;
+    #turn_rate = (np.arctan2(waypoint_pos[1], waypoint_pos[0]) / np.pi) * TURN_GAIN;
     if(SHOW_TURN_GRAPH):
         turn_rate_graph.append(turn_rate);
+    
+    direction = 1 if waypoint_pos[0] >= 0 else -1;
 
     # Work out how fast the wheels should be turning
-    left_wheel = round(-(turn_rate) + ROBOT_V);
-    right_wheel = round(turn_rate + ROBOT_V);
+    left_wheel = round(direction*(-(turn_rate) + ROBOT_V));
+    right_wheel = round(direction*(turn_rate + ROBOT_V));
     if(SHOW_MOTOR_COMMANDS):
         print(f'Pose x:{round(pose[0], 2)} y:{round(pose[1], 2)} t:{round(bot_t, 2)}, WP:x:{round(waypoint_pos[0], 2)} y:{round(waypoint_pos[1], 2)} t:{round(waypoint_pos[2], 2)}')
         print(f'({turn_rate}) => {right_wheel} {left_wheel}')
 
     # Make bot go broooom brooom
     if(USE_LOCALIZER):
-        bot.setVelocity(motor_left=min(max(left_wheel, 0), 100), motor_right=min(max(right_wheel, 0), 100), duration=None, acceleration_time=None);
+        bot.setVelocity(motor_left=min(max(left_wheel, -100), 100), motor_right=min(max(right_wheel, -100), 100), duration=None, acceleration_time=None);
     else:
-        visualizer.setVelocity(min(max(left_wheel, 0), 100), min(max(right_wheel, 0), 100), 0.2);
+        visualizer.setVelocity(min(max(left_wheel, -100), 100), min(max(right_wheel, -100), 100), 0.2);
 
     # Debug stuff
     if(SHOW_FINAL_GRAPH):
