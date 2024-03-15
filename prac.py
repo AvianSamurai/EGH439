@@ -4,11 +4,12 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from pibot_client import PiBot
+from runner import Runner
 
 # [===============================[ SETTINGS ]==================================]
 # Connection settings
 IP = "172.19.232.146"
-USE_LOCALIZER = True;
+USE_LOCALIZER = False;
 LOCALIZER_NUM = 2;
 
 # Encoder Settings
@@ -19,13 +20,14 @@ RIGHT_ENC = 200;
 TRIGGER_DIST = 0.15;
 ROBOT_V = 50;
 TURN_GAIN = 30;
+POSE_TURN_GAIN = 30;
 
 # Limit settings
 MIN_LIM = 0.15;
 MAX_LIM = 1.85;
 
 # Debug Settings
-RUN_COUNT = 0; # 0 for off
+RUN_COUNT = 1000; # 0 for off
 SHOW_FINAL_GRAPH = True;
 SHOW_TURN_GRAPH = True;
 
@@ -38,7 +40,7 @@ turn_rate_graph = [];
 
 def GetPoints():
     ##get robot pose
-    pose = bot.getLocalizerPose(5) if USE_LOCALIZER else (0, 0, 0);
+    pose = bot.getLocalizerPose(5) if USE_LOCALIZER else visualizer.getPose();
     RobX, RobY, = pose[0], pose[1]
 
     ##Rearrange the equation in the form ax + by + c = 0
@@ -87,10 +89,10 @@ def GetPoints():
 
     return (PathX, PathY)
 
-def GoToPosition(x, y):
+def GoToPosition(x, y, t):
     # Get the post of the robot, if the localizer isn't running, that just make
     # some shit up so i can test the fucker
-    pose = bot.getLocalizerPose(9) if USE_LOCALIZER else (0, 0, 0);
+    pose = bot.getLocalizerPose(9) if USE_LOCALIZER else visualizer.getPose();
     bot_t = pose[2] * (np.pi/180);
 
     # Work out coordinates of waypoint in reference to local coordinate frame
@@ -100,7 +102,11 @@ def GoToPosition(x, y):
                 dtype=np.float64)
     waypoint_pos = np.linalg.inv(T_WR) @ np.array([x, y, 1], dtype=np.float64);
 
+    a = np.arctan2(waypoint_pos[1], waypoint_pos[0]) - waypoint_pos[2];
+    b = -waypoint_pos[2] - a;
+
     # Work out angle from front of robot to waypoint, wrap it to range [-90, 90]
+    #turn_rate = (a / np.pi) * TURN_GAIN + (b / np.pi) * POSE_TURN_GAIN;
     turn_rate = (np.arctan2(waypoint_pos[1], waypoint_pos[0]) / np.pi) * TURN_GAIN;
     if(SHOW_TURN_GRAPH):
         turn_rate_graph.append(turn_rate);
@@ -108,11 +114,14 @@ def GoToPosition(x, y):
     # Work out how fast the wheels should be turning
     left_wheel = round(-(turn_rate) + ROBOT_V);
     right_wheel = round(turn_rate + ROBOT_V);
-    print(f'Pose x:{round(pose[0], 2)} y:{round(pose[1], 2)} t:{round(bot_t, 2)}, WP:x:{round(waypoint_pos[0], 2)} y:{round(waypoint_pos[1], 2)}')
+    print(f'Pose x:{round(pose[0], 2)} y:{round(pose[1], 2)} t:{round(bot_t, 2)}, WP:x:{round(waypoint_pos[0], 2)} y:{round(waypoint_pos[1], 2)} t:{round(waypoint_pos[2], 2)}')
     print(f'({turn_rate}) => {right_wheel} {left_wheel}')
 
     # Make bot go broooom brooom
-    bot.setVelocity(motor_left=min(max(left_wheel, 0), 100), motor_right=min(max(right_wheel, 0), 100), duration=None, acceleration_time=None);
+    if(USE_LOCALIZER):
+        bot.setVelocity(motor_left=min(max(left_wheel, 0), 100), motor_right=min(max(right_wheel, 0), 100), duration=None, acceleration_time=None);
+    else:
+        visualizer.setVelocity(min(max(left_wheel, 0), 100), min(max(right_wheel, 0), 100), 0.5);
 
     # Debug stuff
     if(SHOW_FINAL_GRAPH):
@@ -131,13 +140,15 @@ if __name__ == "__main__":
         print("Connecting to the bot\n")
         bot = PiBot(ip=IP, localiser_ip=f'egb439localiser{LOCALIZER_NUM}')
     else:
+        visualizer = Runner();
+        visualizer.randomizeStartingPose();
         print("Connecting to the bot without localizer\n")
-        bot = PiBot(ip=IP)
 
     # Make sure the connection exists and that its not lieing to me
-    print("Running tests")
-    print(f'\tVoltage: {bot.getVoltage():.2f}V')
-    print(f'\tCurrent: {bot.getCurrent():.2f}A')
+    if(USE_LOCALIZER):
+        print("Running tests")
+        print(f'\tVoltage: {bot.getVoltage():.2f}V')
+        print(f'\tCurrent: {bot.getCurrent():.2f}A')
 
     # Some ned shit
     points = GetPoints();
@@ -151,7 +162,7 @@ if __name__ == "__main__":
     itterations = -1;
     print(f'First Waypoint: x:{points[0][0]}, y:{points[1][0]}')
     while(index < len(points[0]) and itterations < RUN_COUNT):
-        way_pos = GoToPosition(points[0][index], points[1][index]);
+        way_pos = GoToPosition(points[0][index], points[1][index], np.arctan2(points[1][index], points[0][index]));
         dist = np.sqrt((way_pos[0])**2 + (way_pos[1])**2)
         print(f'======{dist}')
         if(dist < TRIGGER_DIST):
@@ -161,12 +172,20 @@ if __name__ == "__main__":
         if(RUN_COUNT > 0):
             itterations = itterations + 1;
     
-    pose = bot.getLocalizerPose(9) if USE_LOCALIZER else (0, 0, 0);
+    pose = bot.getLocalizerPose(9) if USE_LOCALIZER else visualizer.getPose();
     while(pose[0] > MIN_LIM and pose[1] > MIN_LIM and pose[0] < MAX_LIM and pose[1] < MAX_LIM):
-        pose = bot.getLocalizerPose(9) if USE_LOCALIZER else (0, 0, 0);
+        pose = bot.getLocalizerPose(9) if USE_LOCALIZER else visualizer.getPose();
+        if USE_LOCALIZER:
+            bot.setVelocity(motor_left=100, motor_right=100, duration=None, acceleration_time=None)
+        else:
+            visualizer.setVelocity(100, 100, 0.1);
     
     # Stop the wheels from moving afterwards
-    bot.setVelocity(motor_left=0, motor_right=0, duration=None, acceleration_time=None)
+    if(USE_LOCALIZER):
+        bot.setVelocity(motor_left=0, motor_right=0, duration=None, acceleration_time=None)
+
+    if(not USE_LOCALIZER):
+       visualizer.showFinal(points);
 
     # Graph the final run
     if(SHOW_FINAL_GRAPH):
