@@ -26,13 +26,14 @@ class Runner(object):
 
     @classmethod
     def getPose(self):
-        return [self.pose[0], self.pose[1], ((((self.pose[2] * 180) / np.pi) + 180) % 180) - 180];
+        return [self.pose[0], self.pose[1], ((((self.pose[2] * 180) / np.pi) + 180) % 360) - 180];
+        
 
     @classmethod
     def setVelocity(self, motorLeft, motorRight, time):
         motorLeft = motorLeft/VELOCITY_TUNER;
         motorRight = motorRight/VELOCITY_TUNER;
-        t_dot = (motorLeft - motorRight) * TURN_SPEED;
+        t_dot = -(motorLeft - motorRight) * TURN_SPEED;
         v = (1/2)*(motorLeft + motorRight)
         delta_pose = np.array([v*np.cos(self.pose[2]),
                                v*np.sin(self.pose[2]),
