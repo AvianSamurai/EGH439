@@ -35,9 +35,10 @@ def animate(i, xs, ys):
     ax.clear()
     ax.axis([0, 2, 0, 2])
     ax.plot(xs, ys)
+    ax.plot(xs, ys, 'ro')
 
     # Format plot
-    plt.title('Bot position')
+    plt.title('Live Robot Tracking')
 # Set up plot to call animate() function periodically
 ani = animation.FuncAnimation(fig, animate, fargs=(xs, ys), interval=500)
 plt.show()
