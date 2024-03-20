@@ -7,7 +7,9 @@ import matplotlib.pyplot as plt
 from pibot_client import PiBot
 
 VELOCITY_TUNER = 5000;
-TURN_SPEED = 20;
+WHEEL_RADIUS = 65.7/2/1000 # m
+WIDTH = 150/1000 # m
+M_PER_1_PER_S = 5.35/1000; # m/s @ v = 1;
 
 class Runner(object):
     @classmethod
@@ -20,8 +22,8 @@ class Runner(object):
     @classmethod
     def randomizeStartingPose(self):
         self.pose = [0, 0, 0];
-        self.pose[0] = random.uniform(0.0, 2.0);
-        self.pose[1] = random.uniform(0.0, 2.0);
+        self.pose[0] = random.uniform(0.2, 1.8);
+        self.pose[1] = random.uniform(0.2, 1.8);
         self.pose[2] = random.uniform(-np.pi, np.pi);
 
     @classmethod
@@ -31,10 +33,8 @@ class Runner(object):
 
     @classmethod
     def setVelocity(self, motorLeft, motorRight, time):
-        motorLeft = motorLeft/VELOCITY_TUNER;
-        motorRight = motorRight/VELOCITY_TUNER;
-        t_dot = -(motorLeft - motorRight) * TURN_SPEED;
-        v = (1/2)*(motorLeft + motorRight)
+        t_dot = -((motorLeft - motorRight)*M_PER_1_PER_S) / WIDTH;
+        v = (1/2)*(motorLeft + motorRight)*M_PER_1_PER_S
         delta_pose = np.array([v*np.cos(self.pose[2]),
                                v*np.sin(self.pose[2]),
                                t_dot], 
