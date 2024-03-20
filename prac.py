@@ -1,10 +1,12 @@
 import argparse
 import time
 import cv2
+import random
 import numpy as np
 import matplotlib.pyplot as plt
 from pibot_client import PiBot
 from runner import Runner
+import win32com.client as wincom
 
 # [===============================[ SETTINGS ]==================================]
 # Connection settings
@@ -21,13 +23,19 @@ FIGURE_8_TIME = 10;
 # Robot Properties
 WHEEL_RADIUS = 65.7/2 # mm
 WIDTH = 150/1000 # m
+M_PER_1_PER_S = 5.35/1000;
 
-# Robot Settings
+# Pose Based Settings
 K_A = 4.7;
 K_B = 2;
 K_P = 0.25;
-K_TOTAL = 1.1;
-M_PER_1_PER_S = 5.35/1000;
+K_TOTAL = 1.5;
+
+# Pure Persuit Settings
+USE_PURE_PURSUIT = True;
+USE_POSE_BASED_FOR_FIRST_WP = True;
+K_TURN_GAIN = 5;
+PURE_PURSUIT_V = 1;
 
 # Robot Settings
 TRIGGER_DIST = 0.1;
@@ -41,12 +49,44 @@ MAX_LIM = 1.85;
 RUN_COUNT = 2500; # 0 for off
 SHOW_DEBUG_GRAPH = True;
 SHOW_MOTOR_COMMANDS = False;
+USE_SPEACH = True;
 
 # Debug variables
 past_positions_x = [];
 past_positions_y = [];
 velocity_graph = [];
 turn_rate_graph = [];
+left_wheel_speeds = [];
+right_wheel_speeds = [];
+
+# Speech Lines
+speak = 0;
+moveToWaySpeak = ["Moving to first waypoint", 
+                  "Heading to first waypoint",
+                  "Aligning with first waypoint",
+                  "On my way to the first waypoint",
+                  "Going to the waypoint"]
+
+startingRunSpeak = ["Starting the timer",
+                    "Starting the run",
+                    "Ok, Lets go",
+                    "Time to do some driving",
+                    "The timer has started"]
+
+outOfTimeSpeak = ["Out of time, heading to wall",
+                  "Timer has elapsed, time to head to the wall",
+                  "Thats all the time we have for today, Parking at the wall",
+                  "No time left, wall time",
+                  "Heading to the wall as the timer has run dry"]
+
+completeSpeak = ["All done", 
+                 "Completed", 
+                 "Did i make you proud?", 
+                 "That was a good run, right?",
+                 "Did you see that?"]
+
+def randLine(lineArray):
+    return random.choice(lineArray);
 
 # [===============================[ METHODS ]==================================]
 
@@ -72,6 +112,10 @@ def drive(speed, turn_rate):
     if(right_wheel > 100):
         left_wheel = left_wheel/right_wheel * 100;
         right_wheel = 100;
+    
+    if(SHOW_DEBUG_GRAPH):
+        left_wheel_speeds.append(left_wheel);
+        right_wheel_speeds.append(right_wheel);
 
     if(SHOW_MOTOR_COMMANDS):
         print(f'v: {round(speed, 3)}, turn_rate: {round(turn_rate, 2)}')
@@ -141,50 +185,70 @@ def GetPoints():
 def GetFig8():
     ##get robot pose
     pose = GetPose();
-    RobX, RobY, = pose[0], pose[1];
+    RobX, RobY, = pose[0], pose[1]
+    Num = 25
+    NumSpec = 100
 
-    ##Rearrange the equation in the form ax + by + c = 0
-    a = -1
-    b = 1
-    c = 0.001
-    x = np.linspace(0, 2, 1000)
-    y = (-a * x - c) / b
+    ##generate path
+    t = np.linspace(0, 2*np.pi, Num)
+    tLine = np.linspace(0, 2*np.pi, NumSpec)
+    a = 0.75 / np.sqrt(2)
 
+    PathX = (a * np.sqrt(2) * np.cos(t)) / (np.sin(t)**2 + 1) + 1
+    PathY = (a * np.sqrt(2) * np.cos(t) * np.sin(t)) / (np.sin(t)**2 + 1) + 1
 
-    ##plot line
+    xLine = (a * np.sqrt(2) * np.cos(tLine)) / (np.sin(tLine)**2 + 1) + 1
+    yLine = (a * np.sqrt(2) * np.cos(tLine) * np.sin(tLine)) / (np.sin(tLine)**2 + 1) + 1
+
+    print(PathX)
+    print(PathY)
+
+    ##plot path
     fig1 = plt.figure()
     plt.axis([0, 2, 0, 2])
-    plt.plot(x, y, linestyle = '-')
+    plt.plot(PathX, PathY, 'bo')
+    plt.plot(xLine, yLine, 'g-')
+    #plt.show()
 
     ##plot robto
     plt.plot(RobX,RobY,'ro') 
-    #plt.show
-
-    ##find closest point
-    ClosestX = (b * (b * RobX - a * RobY) - a * c) / (a**2 + b**2)
-    ClosestY = (a * (-b * RobX + a * RobY) - b * c) / (a**2 + b**2)
-    ClosestPoint = ClosestX, ClosestY
-
-    plt.plot(ClosestX, ClosestY,'go') 
-    #plt.show()
-
-    ##find end point
-    if ClosestX < 1:
-        EndPoint = 1.8, ((-a * 1.8 - c) / b)
-    else:
-        EndPoint = 0.2, ((-a * 0.2 - c) / b)
-
-    plt.plot(EndPoint[0], EndPoint[1],'bo') 
-    #plt.show()
-
-    PathX = np.linspace(ClosestX, EndPoint[0], 12)
-    PathY = np.linspace(ClosestY, EndPoint[1], 12)
-    PathX = PathX[1:11]
-    PathY = PathY[1:11]
-
-    plt.plot(PathX, PathY,'o') 
     plt.arrow(RobX, RobY, 0.1*np.cos(pose[2]*(np.pi/180)), 0.1*np.sin(pose[2]*(np.pi/180)))
     plt.show()
+
+    ##find closest point
+    i = 0
+    j = 0
+    CloPeak = 100
+    while i < NumSpec:
+        CloMeas = np.sqrt((RobX - xLine[i])**2 + (RobY - yLine[i])**2)
+        if CloPeak > CloMeas:
+            j = i
+            CloPeak = CloMeas
+        i = i + 1
+    ClosestPoint = xLine[j], yLine[j]
+
+    #plt.plot(ClosestPoint[0], ClosestPoint[1],'go') 
+    #plt.show()
+
+    PathX[:0] = [ClosestPoint[0]]
+    PathY[:0] = [ClosestPoint[1]]
+
+    ##generate poses
+    PathT = [];
+    for i in range(0, len(PathX)):
+        if(i >= len(PathX) - 1):
+            PathT.append(np.arctan2(PathY[0] - PathY[i], PathX[0] - PathX[i]))
+        else:
+            PathT.append(np.arctan2(PathY[i+1] - PathY[i], PathX[i+1] - PathX[i]))
+        plt.arrow(PathX[i], PathY[i], 0.1*np.cos(PathT[i]), 0.1*np.sin(PathT[i]))
+
+    plt.axis([0, 2, 0, 2])
+    plt.plot(PathX, PathY,'bo') 
+    plt.plot(ClosestPoint[0], ClosestPoint[1],'go') 
+    plt.plot(RobX, RobY,'ro') 
+    plt.show()
+
+    return (PathX, PathY, PathT);
 
 last_pose = [];
 last_time = 0;
@@ -198,6 +262,8 @@ def RecordDebugData(pose, steering_angle):
         past_positions_y.append(pose[1]);
         turn_rate_graph.append(steering_angle);
 
+        if(last_pose == []): last_pose = GetPose();
+
         pose = GetPose();
         pose_dist = np.sqrt((pose[0] - last_pose[0])**2 + (pose[1] - last_pose[1])**2);
         last_pose = pose;
@@ -209,6 +275,10 @@ def StartRun():
     global last_time, start_time, last_pose;
 
     print("Run Starting");
+
+    if(USE_SPEACH):
+        speak.Speak(randLine(startingRunSpeak));
+
     last_time = time.time();
     start_time = time.time();
     last_pose = GetPose();
@@ -223,7 +293,28 @@ def DriveToWall(velocity):
         drive(velocity, 0);
         RecordDebugData(pose, 0);
 
-def StepTowardsPosition(x, y, t):
+def PoseBased(pose, theta, wp):
+    # using control scheme proposed in slide 47 of Lecture 3, calculate a, b, p
+    a = np.arctan2(wp[1],wp[0]);
+    b = pose[2] - theta
+    p = np.sqrt(wp[0]**2 + wp[1]**2);
+
+    # calculate velocity, direction (L), and heading angle
+    v = clamp(p*K_P, 0.3, 0.5);
+    w = K_A*a + K_B*b;
+
+    # Convert the heading angle to strearing rate
+    steering_angle = clamp(np.arctan((w)/v), -np.pi, np.pi) * K_TOTAL;
+
+    return (v, steering_angle)
+
+def PurePersuit(wp):
+    # Convert the heading angle to strearing rate
+    steering_angle = np.arctan2(wp[1],wp[0]) * K_TURN_GAIN;
+
+    return (PURE_PURSUIT_V, steering_angle)
+
+def StepTowardsPosition(x, y, t, usePurePursuit):
     # Get the pose of the robot and convert to radians
     pose = GetPose();
     pose[2] = pose[2] * (np.pi/180);
@@ -235,21 +326,10 @@ def StepTowardsPosition(x, y, t):
     # frame to get an offset from the robot
     wp = np.transpose(T_RW @ np.array([[x], [y], [1]] ,dtype=np.float64))[0];
 
-    # using control scheme proposed in slide 47 of Lecture 3, calculate a, b, p
-    a = np.arctan2(wp[1],wp[0]);
-    b = pose[2] - t
-    p = np.sqrt(wp[0]**2 + wp[1]**2);
-
-    # calculate velocity, direction (L), and heading angle
-    v = clamp(p*K_P, 0.3, 0.5);
-    dir = 1 #if wp[0] >= 0 else -1;
-    w = K_A*a + K_B*b;
-
-    # Convert the heading angle to strearing rate
-    steering_angle = clamp(np.arctan((w*dir)/v), -np.pi, np.pi) * K_TOTAL;
+    v, steering_angle = PurePersuit(wp) if usePurePursuit else PoseBased(pose, t, wp);
 
     # Instruct the car to drive at the speed and turnrate
-    drive(v*dir, steering_angle);
+    drive(v, steering_angle);
 
     # Debug stuff
     RecordDebugData(pose, steering_angle);
@@ -260,6 +340,10 @@ def StepTowardsPosition(x, y, t):
 # [===============================[ MAIN ]==================================]
 
 if __name__ == "__main__":
+    speak = 0;
+    if USE_SPEACH:
+        speak = wincom.Dispatch("SAPI.SpVoice")
+
     # Forge an unbreakable connection
     if(USE_LOCALIZER):
         print("Connecting to the bot\n")
@@ -283,27 +367,41 @@ if __name__ == "__main__":
     visited_y = [];
 
     # Setup some time sensitive run variables
-    StartRun();
+    if RUN_TYPE == 0: StartRun();
 
     # Do the go
     index = 0; # Waypoint Index
     itterations = -1; # Itteration count for limiting run time
+    isFirstWp = True;
     print(f'First Waypoint: x:{points[0][0]}, y:{points[1][0]}')
+    if USE_SPEACH:
+        speak.Speak(randLine(moveToWaySpeak));
     while(index < len(points[0]) and itterations < RUN_COUNT):
-        way_pos = StepTowardsPosition(points[0][index], points[1][index], points[2][index]);
+        use_ps = USE_PURE_PURSUIT
+        if(USE_POSE_BASED_FOR_FIRST_WP and isFirstWp):
+            use_ps = False;
+        
+        way_pos = StepTowardsPosition(points[0][index], points[1][index], points[2][index], use_ps);
 
         # Calculate distance to waypoint so see if waypoint is triggered
         dist = np.sqrt((way_pos[0])**2 + (way_pos[1])**2)
         if(dist < TRIGGER_DIST): # If true waypoint has triggered
             index = index + 1;
             if(index < len(points[0])):
+                if(isFirstWp and RUN_TYPE == 1):
+                    # Setup some time sensitive run variables
+                    StartRun();
+                isFirstWp = False;
                 print(f'TRIGGERED: Next Waypoint: x:{points[0][index]}, y:{points[1][index]}')
                 print(f'\t Dist was {round(dist,2)} for wp_x: {round(way_pos[0], 2)} wp_y: {round(way_pos[1], 2)}')
 
         if(RUN_TYPE == 1):
-            if(index >= len(points[0])):
+            if(index >= len(points[0]) - 1):
                 index = 0;
-            if(time.time() - start_time > FIGURE_8_TIME):
+            if(not isFirstWp and time.time() - start_time > FIGURE_8_TIME):
+                print("Time limit reached, Driving to wall")
+                if(USE_SPEACH):
+                    speak.Speak(randLine(outOfTimeSpeak));
                 break;
 
 
@@ -311,7 +409,13 @@ if __name__ == "__main__":
         if(RUN_COUNT > 0):
             itterations = itterations + 1;
     
+    if(itterations >= RUN_COUNT):
+        print("Itteration limit reached, ending early")
+
     DriveToWall(0.5);
+
+    if(USE_SPEACH):
+        speak.Speak(randLine(completeSpeak));
     
     # Stop the wheels from moving afterwards
     if(USE_LOCALIZER):
@@ -341,5 +445,10 @@ if __name__ == "__main__":
         ax0[0,1].plot(velocity_graph);
         avg_velocity = np.mean(velocity_graph);
         ax0[0,1].set_title(f"Velocity over time, Mean: {round(avg_velocity,3)}");
+
+        ax0[1,1].plot(left_wheel_speeds);
+        ax0[1,1].plot(right_wheel_speeds);
+        ax0[1,1].legend(["Left Wheel", "Right Wheel"]);
+        ax0[1,1].set_title("Wheel Speeds");
 
         plt.show();
