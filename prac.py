@@ -12,9 +12,11 @@ IP = "172.19.232.146"
 USE_LOCALIZER = False;
 LOCALIZER_NUM = 2;
 
-# Encoder Settings
-LEFT_ENC = 200;
-RIGHT_ENC = 200;
+# Run Type
+# 0 = Line
+# 1 = Figure 8
+RUN_TYPE = 1;
+FIGURE_8_TIME = 10;
 
 # Robot Properties
 WHEEL_RADIUS = 65.7/2 # mm
@@ -22,18 +24,13 @@ WIDTH = 150/1000 # m
 
 # Robot Settings
 K_A = 4.7;
-K_B = -2;
+K_B = 2;
 K_P = 0.25;
+K_TOTAL = 1.1;
 M_PER_1_PER_S = 5.35/1000;
-offset = 0.1;
 
 # Robot Settings
 TRIGGER_DIST = 0.1;
-TRIGGER_THETA = 5 * (np.pi/180)
-ROBOT_V = 50;
-INTERNAL_TURN_GAIN = 2;
-POSE_TURN_GAIN = 1;
-TURN_GAIN = 15;
 MAX_TURN_RATE = 30;
 
 # Arena Limit settings
@@ -42,13 +39,13 @@ MAX_LIM = 1.85;
 
 # Debug Settings
 RUN_COUNT = 2500; # 0 for off
-SHOW_FINAL_GRAPH = True;
-SHOW_TURN_GRAPH = True;
+SHOW_DEBUG_GRAPH = True;
 SHOW_MOTOR_COMMANDS = False;
 
 # Debug variables
 past_positions_x = [];
 past_positions_y = [];
+velocity_graph = [];
 turn_rate_graph = [];
 
 # [===============================[ METHODS ]==================================]
@@ -69,6 +66,13 @@ def drive(speed, turn_rate):
     right_wheel = V_left/M_PER_1_PER_S;
     left_wheel = V_right/M_PER_1_PER_S;
 
+    if(left_wheel > 100):
+        right_wheel = right_wheel/left_wheel * 100;
+        left_wheel = 100;
+    if(right_wheel > 100):
+        left_wheel = left_wheel/right_wheel * 100;
+        right_wheel = 100;
+
     if(SHOW_MOTOR_COMMANDS):
         print(f'v: {round(speed, 3)}, turn_rate: {round(turn_rate, 2)}')
         print(f'\t => {round(right_wheel, 2)} {round(left_wheel,2)}')
@@ -77,6 +81,7 @@ def drive(speed, turn_rate):
         bot.setVelocity(motor_left=min(max(left_wheel, -100), 100), motor_right=min(max(right_wheel, -100), 100), duration=None, acceleration_time=None);
     else:
         visualizer.setVelocity(min(max(left_wheel, -100), 100), min(max(right_wheel, -100), 100), 0.1);
+    time.sleep(0.1);
 
 def GetPoints():
     ##get robot pose
@@ -133,9 +138,94 @@ def GetPoints():
 
     return (PathX, PathY, PathT)
 
-def GoToPosition(x, y, t):
+def GetFig8():
+    ##get robot pose
+    pose = GetPose();
+    RobX, RobY, = pose[0], pose[1];
+
+    ##Rearrange the equation in the form ax + by + c = 0
+    a = -1
+    b = 1
+    c = 0.001
+    x = np.linspace(0, 2, 1000)
+    y = (-a * x - c) / b
+
+
+    ##plot line
+    fig1 = plt.figure()
+    plt.axis([0, 2, 0, 2])
+    plt.plot(x, y, linestyle = '-')
+
+    ##plot robto
+    plt.plot(RobX,RobY,'ro') 
+    #plt.show
+
+    ##find closest point
+    ClosestX = (b * (b * RobX - a * RobY) - a * c) / (a**2 + b**2)
+    ClosestY = (a * (-b * RobX + a * RobY) - b * c) / (a**2 + b**2)
+    ClosestPoint = ClosestX, ClosestY
+
+    plt.plot(ClosestX, ClosestY,'go') 
+    #plt.show()
+
+    ##find end point
+    if ClosestX < 1:
+        EndPoint = 1.8, ((-a * 1.8 - c) / b)
+    else:
+        EndPoint = 0.2, ((-a * 0.2 - c) / b)
+
+    plt.plot(EndPoint[0], EndPoint[1],'bo') 
+    #plt.show()
+
+    PathX = np.linspace(ClosestX, EndPoint[0], 12)
+    PathY = np.linspace(ClosestY, EndPoint[1], 12)
+    PathX = PathX[1:11]
+    PathY = PathY[1:11]
+
+    plt.plot(PathX, PathY,'o') 
+    plt.arrow(RobX, RobY, 0.1*np.cos(pose[2]*(np.pi/180)), 0.1*np.sin(pose[2]*(np.pi/180)))
+    plt.show()
+
+last_pose = [];
+last_time = 0;
+start_time = 0;
+
+def RecordDebugData(pose, steering_angle):
+    global last_time, start_time, last_pose;
+
+    if(SHOW_DEBUG_GRAPH):
+        past_positions_x.append(pose[0]);
+        past_positions_y.append(pose[1]);
+        turn_rate_graph.append(steering_angle);
+
+        pose = GetPose();
+        pose_dist = np.sqrt((pose[0] - last_pose[0])**2 + (pose[1] - last_pose[1])**2);
+        last_pose = pose;
+        delta_t = time.time() - last_time;
+        last_time = time.time();
+        velocity_graph.append(pose_dist / delta_t);
+
+def StartRun():
+    global last_time, start_time, last_pose;
+
+    print("Run Starting");
+    last_time = time.time();
+    start_time = time.time();
+    last_pose = GetPose();
+
+def GetPose():
+    return bot.getLocalizerPose(9) if USE_LOCALIZER else visualizer.getPose();
+
+def DriveToWall(velocity):
+    pose = GetPose();
+    while(pose[0] < MAX_LIM and pose[1] < MAX_LIM and pose[0] > MIN_LIM and pose[1] > MIN_LIM):
+        pose = GetPose();
+        drive(velocity, 0);
+        RecordDebugData(pose, 0);
+
+def StepTowardsPosition(x, y, t):
     # Get the pose of the robot and convert to radians
-    pose = bot.getLocalizerPose(9) if USE_LOCALIZER else visualizer.getPose();
+    pose = GetPose();
     pose[2] = pose[2] * (np.pi/180);
 
     # Calculate transform of world with respect to the robot
@@ -151,71 +241,21 @@ def GoToPosition(x, y, t):
     p = np.sqrt(wp[0]**2 + wp[1]**2);
 
     # calculate velocity, direction (L), and heading angle
-    v = clamp(p*K_P, 0.25, 0.5);
+    v = clamp(p*K_P, 0.3, 0.5);
     dir = 1 #if wp[0] >= 0 else -1;
     w = K_A*a + K_B*b;
 
     # Convert the heading angle to strearing rate
-    steering_angle = clamp(np.arctan((w*dir)/v), -np.pi/2, np.pi/2);
+    steering_angle = clamp(np.arctan((w*dir)/v), -np.pi, np.pi) * K_TOTAL;
 
     # Instruct the car to drive at the speed and turnrate
     drive(v*dir, steering_angle);
 
     # Debug stuff
-    if(SHOW_FINAL_GRAPH):
-        past_positions_x.append(pose[0]);
-        past_positions_y.append(pose[1]);
-    if(SHOW_TURN_GRAPH):
-        turn_rate_graph.append(steering_angle);
+    RecordDebugData(pose, steering_angle);
 
     # Return the waypoint position relative to the robot
     return wp;
-
-def GoToPositionOld(x, y, t):
-    # Get the post of the robot, if the localizer isn't running, that just make
-    # some shit up so i can test the fucker
-    pose = bot.getLocalizerPose(9) if USE_LOCALIZER else visualizer.getPose();
-    bot_t = pose[2] * (np.pi/180);
-
-    # Work out coordinates of waypoint in reference to local coordinate frame
-    T_WR = transformation_matrix_2d(pose[0], pose[1], bot_t);
-    waypoint_pos = np.linalg.inv(T_WR) @ np.transpose(np.array([x, y, 1], dtype=np.float64));
-    waypoint_pos = np.transpose(waypoint_pos)
-
-    a = np.arctan2(waypoint_pos[1], waypoint_pos[0]);
-    b = -bot_t - t;
-
-    # Work out angle from front of robot to waypoint, wrap it to range [-90, 90]
-    w = a * INTERNAL_TURN_GAIN + b * POSE_TURN_GAIN;
-    #v = np.sqrt(waypoint_pos[0]**2 + waypoint_pos[1]**2);
-    direction = 1 if waypoint_pos[0] >= 0 else -1;
-    turn_rate = np.arctan(w*direction);
-    turn_rate = clamp(TURN_GAIN*turn_rate, -MAX_TURN_RATE, MAX_TURN_RATE)
-    #turn_rate = (np.arctan2(waypoint_pos[1], waypoint_pos[0]) / np.pi) * TURN_GAIN;
-    if(SHOW_TURN_GRAPH):
-        turn_rate_graph.append(turn_rate);
-
-    # Work out how fast the wheels should be turning
-    left_wheel = round(direction*(-(turn_rate) + ROBOT_V));
-    right_wheel = round(direction*(turn_rate + ROBOT_V));
-    if(SHOW_MOTOR_COMMANDS):
-        print(f'Pose x:{round(pose[0], 2)} y:{round(pose[1], 2)} t:{round(bot_t, 2)}, WP:x:{round(waypoint_pos[0], 2)} y:{round(waypoint_pos[1], 2)} t:{round(waypoint_pos[2], 2)}')
-        print(f'({turn_rate}) => {right_wheel} {left_wheel}')
-
-    # Make bot go broooom brooom
-    if(USE_LOCALIZER):
-        bot.setVelocity(motor_left=min(max(left_wheel, -100), 100), motor_right=min(max(right_wheel, -100), 100), duration=None, acceleration_time=None);
-    else:
-        visualizer.setVelocity(min(max(left_wheel, -100), 100), min(max(right_wheel, -100), 100), 0.2);
-
-    # Debug stuff
-    if(SHOW_FINAL_GRAPH):
-        past_positions_x.append(pose[0]);
-        past_positions_y.append(pose[1]);
-
-    #time.sleep(0.5); # Bed time now (perhaps tune sleep length to localizer time or just do a better job)
-
-    return waypoint_pos;
 
 # [===============================[ MAIN ]==================================]
 
@@ -236,61 +276,70 @@ if __name__ == "__main__":
         print(f'\tCurrent: {bot.getCurrent():.2f}A')
 
     # Some ned shit
-    points = GetPoints();
+    points = GetPoints() if RUN_TYPE == 0 else GetFig8();
 
     # debug stuff
     visited_x = [];
     visited_y = [];
 
+    # Setup some time sensitive run variables
+    StartRun();
+
     # Do the go
-    index = 0;
-    itterations = -1;
+    index = 0; # Waypoint Index
+    itterations = -1; # Itteration count for limiting run time
     print(f'First Waypoint: x:{points[0][0]}, y:{points[1][0]}')
     while(index < len(points[0]) and itterations < RUN_COUNT):
-        way_pos = GoToPosition(points[0][index], points[1][index], points[2][index]);
+        way_pos = StepTowardsPosition(points[0][index], points[1][index], points[2][index]);
+
+        # Calculate distance to waypoint so see if waypoint is triggered
         dist = np.sqrt((way_pos[0])**2 + (way_pos[1])**2)
-        if(dist < TRIGGER_DIST):# and abs(np.arctan2(way_pos[1],way_pos[0])) < TRIGGER_THETA):
+        if(dist < TRIGGER_DIST): # If true waypoint has triggered
             index = index + 1;
             if(index < len(points[0])):
                 print(f'TRIGGERED: Next Waypoint: x:{points[0][index]}, y:{points[1][index]}')
                 print(f'\t Dist was {round(dist,2)} for wp_x: {round(way_pos[0], 2)} wp_y: {round(way_pos[1], 2)}')
+
+        if(RUN_TYPE == 1):
+            if(index >= len(points[0])):
+                index = 0;
+            if(time.time() - start_time > FIGURE_8_TIME):
+                break;
+
+
+        # If theres a run count limitation, keep track of itterations
         if(RUN_COUNT > 0):
             itterations = itterations + 1;
     
-    pose = bot.getLocalizerPose(9) if USE_LOCALIZER else visualizer.getPose();
-    while(pose[0] > MIN_LIM and pose[1] > MIN_LIM and pose[0] < MAX_LIM and pose[1] < MAX_LIM):
-        pose = bot.getLocalizerPose(9) if USE_LOCALIZER else visualizer.getPose();
-        if(SHOW_FINAL_GRAPH):
-            past_positions_x.append(pose[0]);
-            past_positions_y.append(pose[1]);
-        if USE_LOCALIZER:
-            bot.setVelocity(motor_left=100, motor_right=100, duration=None, acceleration_time=None)
-        else:
-            visualizer.setVelocity(100, 100, 0.4);
+    DriveToWall(0.5);
     
     # Stop the wheels from moving afterwards
     if(USE_LOCALIZER):
         bot.setVelocity(motor_left=0, motor_right=0, duration=None, acceleration_time=None)
 
     # Graph the final run
-    if(SHOW_FINAL_GRAPH):
-        fig0 = plt.figure();
-        ax0 = plt.gca();
-        plt.axis([0, 2, 0, 2]);
-        plt.title(f'Hit Points: {index}')
-        plt.plot(past_positions_x, past_positions_y);
-        plt.plot(past_positions_x[len(past_positions_x) - 1], past_positions_y[len(past_positions_y) - 1], "x")
-        plt.scatter(points[0], points[1], c = ("b" if index < len(points[0]) else "g"));
+    if(SHOW_DEBUG_GRAPH):
+        fig0, ax0 = plt.subplots(2,2);
+        # Map Plot
+        ax0[0,0].axis([0, 2, 0, 2]);
+        ax0[0,0].set_title(f'Hit Points: {index}');
+        ax0[0,0].plot(past_positions_x, past_positions_y);
+        ax0[0,0].plot(past_positions_x[len(past_positions_x) - 1], past_positions_y[len(past_positions_y) - 1], "x")
+        ax0[0,0].scatter(points[0], points[1], c = ("b" if index < len(points[0]) else "g"));
         if(index > 0 and index < len(points[0])):
-            plt.scatter(points[0][0:index], points[1][0:index], c="g");
+            ax0[0,0].scatter(points[0][0:index], points[1][0:index], c="g");
         
         for i in range(len(points[0])):
-            ax0.add_patch(plt.Circle((points[0][i], points[1][i]), TRIGGER_DIST, color='b', linestyle='--', fill=False));
-        ax0.set_aspect('equal', 'box');
-        plt.show();
+            ax0[0,0].add_patch(plt.Circle((points[0][i], points[1][i]), TRIGGER_DIST, color='b', linestyle='--', fill=False));
+        ax0[0,0].set_aspect('equal', 'box');
     
-    if(SHOW_TURN_GRAPH):
-        fig1 = plt.figure();
-        plt.plot(turn_rate_graph);
-        plt.title("Turn rate over time")
+        # Turnrate Plot
+        ax0[1,0].plot(turn_rate_graph);
+        ax0[1,0].set_title("Turn rate over time")
+
+        # velocity plot
+        ax0[0,1].plot(velocity_graph);
+        avg_velocity = np.mean(velocity_graph);
+        ax0[0,1].set_title(f"Velocity over time, Mean: {round(avg_velocity,3)}");
+
         plt.show();
