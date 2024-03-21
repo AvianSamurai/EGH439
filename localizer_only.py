@@ -15,7 +15,6 @@ class Localizer(object):
     def __init__(self, localiser_ip=None, localiser_port=8080):
         self.localiser_ip = localiser_ip
         self.localiser_port = localiser_port
-        self.endpoint = 'http://{}:{}'.format(self.ip, self.port)
         if localiser_ip is not None:
             self.localiser_endpoint = 'http://{}:{}'.format(localiser_ip, localiser_port)
             print('Localiser setup')

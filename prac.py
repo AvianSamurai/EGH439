@@ -15,7 +15,7 @@ import os
 IP = "172.19.232.146"
 USE_LOCALIZER = False;
 USE_TRACKER = False;
-LOCALIZER_NUM = 2;
+LOCALIZER_NUM = 1;
 
 # Simulation Settings
 SIMULATION_TIMESTEP = 0.3;
@@ -49,7 +49,7 @@ PURE_PURSUIT_V = 0.4;
 
 # Robot Settings
 TRIGGER_DIST = 0.1;
-MAX_TURN_RATE = 30;
+MAX_TURN_RATE = 20; #30
 
 # Arena Limit settings
 MIN_LIM = 0.15;
