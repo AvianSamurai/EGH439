@@ -13,15 +13,15 @@ import os
 # [===============================[ SETTINGS ]==================================]
 # Connection settings
 IP = "172.19.232.146"
-USE_LOCALIZER = False;
-USE_TRACKER = True;
+USE_LOCALIZER = True;
+USE_TRACKER = False;
 LOCALIZER_NUM = 2;
 
 # Run Type
 # 0 = Line
 # 1 = Figure 8
-RUN_TYPE = 0;
-FIGURE_8_TIME = 10;
+RUN_TYPE = 1;
+FIGURE_8_TIME = 20;
 
 # Robot Properties
 WHEEL_RADIUS = 65.7/2 # mm
@@ -124,11 +124,14 @@ def drive(speed, turn_rate):
         print(f'v: {round(speed, 3)}, turn_rate: {round(turn_rate, 2)}')
         print(f'\t => {round(right_wheel, 2)} {round(left_wheel,2)}')
 
+    left_wheel = round(left_wheel);
+    right_wheel = round(right_wheel) 
+
     if(USE_LOCALIZER):
-        bot.setVelocity(motor_left=min(max(left_wheel, -100), 100), motor_right=min(max(right_wheel, -100), 100), duration=None, acceleration_time=None);
+        bot.setVelocity(motor_left=min(max(left_wheel, -100), 100), motor_right=min(max(right_wheel, -100), 100), duration=10, acceleration_time=None);
     else:
         visualizer.setVelocity(min(max(left_wheel, -100), 100), min(max(right_wheel, -100), 100), 0.1);
-    time.sleep(0.1);
+    time.sleep(0.01);
 
 def GetPoints():
     ##get robot pose
@@ -183,7 +186,7 @@ def GetPoints():
     plt.arrow(RobX, RobY, 0.1*np.cos(pose[2]*(np.pi/180)), 0.1*np.sin(pose[2]*(np.pi/180)))
     plt.show()
 
-    return (PathX, PathY, PathT)
+    return (PathX, PathY, PathT, 0)
 
 def GetFig8():
     ##get robot pose
@@ -210,7 +213,7 @@ def GetFig8():
     fig1 = plt.figure()
     plt.axis([0, 2, 0, 2])
     plt.plot(PathX, PathY, 'bo')
-    plt.plot(xLine, yLine, 'g-')
+    plt.plot(xLine, yLine, 'k-')
     #plt.show()
 
     ##plot robto
@@ -222,13 +225,14 @@ def GetFig8():
     i = 0
     j = 0
     CloPeak = 100
-    while i < NumSpec:
-        CloMeas = np.sqrt((RobX - xLine[i])**2 + (RobY - yLine[i])**2)
+    while i < Num: 
+        CloMeas = np.sqrt((RobX - PathX[i])**2 + (RobY - PathY[i])**2)
         if CloPeak > CloMeas:
             j = i
             CloPeak = CloMeas
         i = i + 1
-    ClosestPoint = xLine[j], yLine[j]
+    ClosestPoint = PathX[j], PathY[j]
+    Indx = j
 
     #plt.plot(ClosestPoint[0], ClosestPoint[1],'go') 
     #plt.show()
@@ -251,7 +255,7 @@ def GetFig8():
     plt.plot(RobX, RobY,'ro') 
     plt.show()
 
-    return (PathX, PathY, PathT);
+    return (PathX, PathY, PathT, Indx);
 
 last_pose = [];
 last_time = 0;
@@ -319,8 +323,8 @@ def PurePersuit(wp):
 
 def StepTowardsPosition(x, y, t, usePurePursuit):
     # Get the pose of the robot and convert to radians
-    pose = GetPose();
-    pose[2] = pose[2] * (np.pi/180);
+    rawPose = GetPose();
+    pose = [rawPose[0], rawPose[1], rawPose[2] * (np.pi/180)];
 
     # Calculate transform of world with respect to the robot
     T_RW = np.linalg.inv(transformation_matrix_2d(pose[0], pose[1], pose[2]));
@@ -374,7 +378,7 @@ if __name__ == "__main__":
     if RUN_TYPE == 0: StartRun();
 
     # Do the go
-    index = 0; # Waypoint Index
+    index = points[3]; # Waypoint Index
     itterations = -1; # Itteration count for limiting run time
     isFirstWp = True;
     print(f'First Waypoint: x:{points[0][0]}, y:{points[1][0]}')
