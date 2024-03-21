@@ -5,7 +5,7 @@ from pibot_client import PiBot
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PiBot client')
-    parser.add_argument('--ip', type=str, default='192.168.50.5', help='IP address of PiBot')
+    parser.add_argument('--ip', type=str, default='172.19.232.146', help='IP address of PiBot')
     args = parser.parse_args()
 
     bot = PiBot(ip=args.ip)
@@ -17,9 +17,11 @@ if __name__ == "__main__":
     print(f"get encoders state at beginning: {enc_begin_left}, {enc_begin_right}")
 
     print("speed test");
-    time.sleep(5);
-    bot.setVelocity(100, 100, 1);
-    time.sleep(60);
+    index = 0;
+    while(True):
+        bot.setVelocity(100, 100, 1);
+        print(f"{index} commands sent")
+        index += 1;
 
     print("test left motor")
     bot.setVelocity(10,0)

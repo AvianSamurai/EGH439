@@ -18,6 +18,11 @@ class Runner(object):
         self.currentPoints_x = [];
         self.currentPoints_y = [];
         self.pose = [0, 0, 0];
+    
+    def setPose(self, pose):
+        self.pose = pose;
+        self.pose[2] = self.pose[2] * (np.pi/180);
+
 
     @classmethod
     def randomizeStartingPose(self):

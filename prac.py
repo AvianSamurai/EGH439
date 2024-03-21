@@ -13,14 +13,17 @@ import os
 # [===============================[ SETTINGS ]==================================]
 # Connection settings
 IP = "172.19.232.146"
-USE_LOCALIZER = True;
+USE_LOCALIZER = False;
 USE_TRACKER = False;
 LOCALIZER_NUM = 2;
+
+# Simulation Settings
+SIMULATION_TIMESTEP = 0.3;
 
 # Run Type
 # 0 = Line
 # 1 = Figure 8
-RUN_TYPE = 1;
+RUN_TYPE = 0;
 FIGURE_8_TIME = 20;
 
 # Robot Properties
@@ -32,13 +35,15 @@ M_PER_1_PER_S = 5.35/1000;
 K_A = 4.7;
 K_B = 2;
 K_P = 0.25;
-K_TOTAL = 1.5;
+K_TOTAL = 0.75;
+POSE_MIN_SPEED = 0.25;
+POSE_MAX_SPEED = 0.5;
 
 # Pure Persuit Settings
 USE_PURE_PURSUIT = (RUN_TYPE == 1);
 USE_POSE_BASED_FOR_FIRST_WP = True;
-K_TURN_GAIN = 5;
-PURE_PURSUIT_V = 1;
+K_TURN_GAIN = 1;
+PURE_PURSUIT_V = 0.4;
 
 # Robot Settings
 TRIGGER_DIST = 0.1;
@@ -49,10 +54,10 @@ MIN_LIM = 0.15;
 MAX_LIM = 1.85;
 
 # Debug Settings
-RUN_COUNT = 2500; # 0 for off
+RUN_COUNT = 200; # 0 for off
 SHOW_DEBUG_GRAPH = True;
-SHOW_MOTOR_COMMANDS = False;
-USE_SPEACH = True;
+SHOW_MOTOR_COMMANDS = True;
+USE_SPEACH = False;
 
 # Debug variables
 past_positions_x = [];
@@ -128,10 +133,10 @@ def drive(speed, turn_rate):
     right_wheel = round(right_wheel) 
 
     if(USE_LOCALIZER):
-        bot.setVelocity(motor_left=min(max(left_wheel, -100), 100), motor_right=min(max(right_wheel, -100), 100), duration=10, acceleration_time=None);
+        bot.setVelocity(motor_left=min(max(left_wheel, -100), 100), motor_right=min(max(right_wheel, -100), 100), duration=None, acceleration_time=None);
     else:
-        visualizer.setVelocity(min(max(left_wheel, -100), 100), min(max(right_wheel, -100), 100), 0.1);
-    time.sleep(0.01);
+        visualizer.setVelocity(min(max(left_wheel, -100), 100), min(max(right_wheel, -100), 100), SIMULATION_TIMESTEP);
+        time.sleep(SIMULATION_TIMESTEP)
 
 def GetPoints():
     ##get robot pose
@@ -301,13 +306,15 @@ def DriveToWall(velocity):
         RecordDebugData(pose, 0);
 
 def PoseBased(pose, theta, wp):
+    if(SHOW_MOTOR_COMMANDS):
+        print("Pose Based:");
     # using control scheme proposed in slide 47 of Lecture 3, calculate a, b, p
     a = np.arctan2(wp[1],wp[0]);
     b = pose[2] - theta
     p = np.sqrt(wp[0]**2 + wp[1]**2);
 
     # calculate velocity, direction (L), and heading angle
-    v = clamp(p*K_P, 0.3, 0.5);
+    v = clamp(p*K_P, POSE_MIN_SPEED, POSE_MAX_SPEED);
     w = K_A*a + K_B*b;
 
     # Convert the heading angle to strearing rate
@@ -316,6 +323,8 @@ def PoseBased(pose, theta, wp):
     return (v, steering_angle)
 
 def PurePersuit(wp):
+    if(SHOW_MOTOR_COMMANDS):
+        print("Pure Pursuit:");
     # Convert the heading angle to strearing rate
     steering_angle = np.arctan2(wp[1],wp[0]) * K_TURN_GAIN;
 
@@ -345,6 +354,39 @@ def StepTowardsPosition(x, y, t, usePurePursuit):
     return wp;
 
 # [===============================[ MAIN ]==================================]
+
+def ShowStats():
+    # Graph the final run
+    if(SHOW_DEBUG_GRAPH):
+        fig0, ax0 = plt.subplots(2,2);
+        # Map Plot
+        ax0[0,0].axis([0, 2, 0, 2]);
+        ax0[0,0].set_title(f'Hit Points: {index}');
+        ax0[0,0].plot(past_positions_x, past_positions_y);
+        ax0[0,0].plot(past_positions_x[len(past_positions_x) - 1], past_positions_y[len(past_positions_y) - 1], "x")
+        ax0[0,0].scatter(points[0], points[1], c = ("b" if index < len(points[0]) else "g"));
+        if(index > 0 and index < len(points[0])):
+            ax0[0,0].scatter(points[0][0:index], points[1][0:index], c="g");
+        
+        for i in range(len(points[0])):
+            ax0[0,0].add_patch(plt.Circle((points[0][i], points[1][i]), TRIGGER_DIST, color='b', linestyle='--', fill=False));
+        ax0[0,0].set_aspect('equal', 'box');
+    
+        # Turnrate Plot
+        ax0[1,0].plot(turn_rate_graph);
+        ax0[1,0].set_title("Turn rate over time")
+
+        # velocity plot
+        ax0[0,1].plot(velocity_graph);
+        avg_velocity = np.mean(velocity_graph);
+        ax0[0,1].set_title(f"Velocity over time, Mean: {round(avg_velocity,3)}");
+
+        ax0[1,1].plot(left_wheel_speeds);
+        ax0[1,1].plot(right_wheel_speeds);
+        ax0[1,1].legend(["Left Wheel", "Right Wheel"]);
+        ax0[1,1].set_title("Wheel Speeds");
+
+        plt.show();
 
 if __name__ == "__main__":
     speak = 0;
@@ -385,6 +427,10 @@ if __name__ == "__main__":
     if USE_SPEACH:
         speak.Speak(randLine(moveToWaySpeak));
     while(index < len(points[0]) and itterations < RUN_COUNT):
+
+        if(itterations % 100 == 0 and not itterations == 0):
+            ShowStats();
+
         use_ps = USE_PURE_PURSUIT
         if(USE_POSE_BASED_FOR_FIRST_WP and isFirstWp):
             use_ps = False;
@@ -431,34 +477,4 @@ if __name__ == "__main__":
     if(USE_LOCALIZER):
         bot.setVelocity(motor_left=0, motor_right=0, duration=None, acceleration_time=None)
 
-    # Graph the final run
-    if(SHOW_DEBUG_GRAPH):
-        fig0, ax0 = plt.subplots(2,2);
-        # Map Plot
-        ax0[0,0].axis([0, 2, 0, 2]);
-        ax0[0,0].set_title(f'Hit Points: {index}');
-        ax0[0,0].plot(past_positions_x, past_positions_y);
-        ax0[0,0].plot(past_positions_x[len(past_positions_x) - 1], past_positions_y[len(past_positions_y) - 1], "x")
-        ax0[0,0].scatter(points[0], points[1], c = ("b" if index < len(points[0]) else "g"));
-        if(index > 0 and index < len(points[0])):
-            ax0[0,0].scatter(points[0][0:index], points[1][0:index], c="g");
-        
-        for i in range(len(points[0])):
-            ax0[0,0].add_patch(plt.Circle((points[0][i], points[1][i]), TRIGGER_DIST, color='b', linestyle='--', fill=False));
-        ax0[0,0].set_aspect('equal', 'box');
-    
-        # Turnrate Plot
-        ax0[1,0].plot(turn_rate_graph);
-        ax0[1,0].set_title("Turn rate over time")
-
-        # velocity plot
-        ax0[0,1].plot(velocity_graph);
-        avg_velocity = np.mean(velocity_graph);
-        ax0[0,1].set_title(f"Velocity over time, Mean: {round(avg_velocity,3)}");
-
-        ax0[1,1].plot(left_wheel_speeds);
-        ax0[1,1].plot(right_wheel_speeds);
-        ax0[1,1].legend(["Left Wheel", "Right Wheel"]);
-        ax0[1,1].set_title("Wheel Speeds");
-
-        plt.show();
+    ShowStats();
