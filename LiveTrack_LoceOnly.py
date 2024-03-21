@@ -5,7 +5,7 @@ import matplotlib.animation as animation
 import subprocess
 from localizer_only import Localizer
 
-LOCALIZER_NUM = 2;
+LOCALIZER_NUM = 1;
 
 # Create figure for plotting
 fig = plt.figure()

@@ -2,16 +2,16 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 
-#from pibot_client import PiBot
-from localizer_only import Localizer
+from pibot_client import PiBot
+#from localizer_only import Localizer
 # [===============================[ SETTINGS ]==================================]
 # Connection settings
 IP = "172.19.232.146"
 USE_LOCALIZER = True;
-LOCALIZER_NUM = 2;
+LOCALIZER_NUM = 1;
 print("Connecting to the bot\n")
-#bot = PiBot(ip=IP, localiser_ip=f'egb439localiser{LOCALIZER_NUM}')
-bot = Localizer(localiser_ip=f'egb439localiser{LOCALIZER_NUM}')
+bot = PiBot(ip=IP, localiser_ip=f'egb439localiser{LOCALIZER_NUM}')
+#bot = Localizer(localiser_ip=f'egb439localiser{LOCALIZER_NUM}')
 CurrPose = [0, 0, 0]
 i = 0
 
@@ -34,15 +34,15 @@ def LoceSpeed():
     global i, CurrPose, StartTime, PrevEncode, PrevTheta, VehicleWidth, WheelRadius, LastTime, Transmis
     
     Pose = bot.getLocalizerPose(9)
-    #Encode = np.asarray(bot.getEncoders())
-    Encode = np.array(np.array([377, 377]) * i)
+    Encode = np.asarray(bot.getEncoders())
+    #Encode = np.array(np.array([377, 377]) * i)
     
     i = i + 1
     if Pose == CurrPose:
         loceOutputState = 'Dupe'
+        PrevTheta = Pose[2]
         PrevX = Pose[0]
         PrevY = Pose[1]
-        PrevTheta = Pose[2]
 
         TimeDiff = time.time() - LastTime
         EncoderDiff = Encode - PrevEncode
@@ -55,16 +55,16 @@ def LoceSpeed():
         GuessTheta = PrevTheta + (((WheelVel[0] - WheelVel[1]) / VehicleWidth) * TimeDiff)
         
         Pose = [GuessX, GuessY, GuessTheta]
-        CurrPose = Pose
+        plt.plot((Pose[0]),(Pose[1]),'ro') 
     elif not Pose == CurrPose:
         loceOutputState = 'New'
-        CurrPose = Pose
+        plt.plot((Pose[0]),(Pose[1]),'bo') 
     else:
         loceOutputState = 'Error'
         Pose = [0, 0, 0]
     
     PrevEncode = Encode
-    PrevTheta = Pose[2]
+    CurrPose = Pose
     CurrTime = time.time() - StartTime
     LastTime = time.time()
     return(i, CurrTime, loceOutputState, Pose)
@@ -73,3 +73,4 @@ while (time.time() - StartTime) < 30:
     output = LoceSpeed()
     print(f"{output}")
     time.sleep(0.1)
+plt.show()

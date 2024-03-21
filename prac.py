@@ -15,12 +15,12 @@ import os
 IP = "172.19.232.146"
 USE_LOCALIZER = True;
 USE_TRACKER = False;
-LOCALIZER_NUM = 2;
+LOCALIZER_NUM = 1;
 
 # Run Type
 # 0 = Line
 # 1 = Figure 8
-RUN_TYPE = 1;
+RUN_TYPE = 0;
 FIGURE_8_TIME = 20;
 
 # Robot Properties
@@ -42,7 +42,7 @@ PURE_PURSUIT_V = 1;
 
 # Robot Settings
 TRIGGER_DIST = 0.1;
-MAX_TURN_RATE = 30;
+MAX_TURN_RATE = 20; #30
 
 # Arena Limit settings
 MIN_LIM = 0.15;
