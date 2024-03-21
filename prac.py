@@ -18,7 +18,7 @@ USE_TRACKER = False;
 LOCALIZER_NUM = 1;
 
 # Simulation Settings
-SIMULATION_TIMESTEP = 0.3;
+SIMULATION_TIMESTEP = 0.1;
 
 # Run Type
 # 0 = Line
@@ -31,6 +31,7 @@ WHEEL_RADIUS = 65.7/2 # mm
 WIDTH = 150/1000 # m
 ENCODER_RANGE = 377;
 ENCODER_TICK_DIST = (WHEEL_RADIUS * 2 * np.pi) / 377
+TRANSMISSION = np.array([ENCODER_TICK_DIST, ENCODER_TICK_DIST])
 M_PER_1_PER_S = 5.35/1000;
 
 # Pose Based Settings
@@ -58,7 +59,8 @@ MAX_LIM = 1.85;
 # Debug Settings
 RUN_COUNT = 200; # 0 for off
 SHOW_DEBUG_GRAPH = True;
-SHOW_MOTOR_COMMANDS = True;
+SHOW_MOTOR_COMMANDS = False;
+SHOW_LOCALIZER_COMMANDS = True;
 USE_SPEACH = False;
 
 # Debug variables
@@ -297,8 +299,52 @@ def StartRun():
     start_time = time.time();
     last_pose = GetPose();
 
+PrevEncode = np.array([0, 0])
+lastFrameTime = time.time();
+CurrPose = [0, 0, 0];
+PrevTheta = 0;
+
 def GetPose():
-    return bot.getLocalizerPose(9) if USE_LOCALIZER else visualizer.getPose();
+    if not USE_LOCALIZER: return visualizer.getPose();
+    
+    global CurrPose, start_time, PrevEncode, PrevTheta, lastFrameTime
+    
+    Pose = bot.getLocalizerPose(9)
+    Encode = np.asarray(bot.getEncoders())
+    
+    if Pose == CurrPose:
+        loceOutputState = 'Dupe'
+        PrevX = Pose[0]
+        PrevY = Pose[1]
+        PrevTheta = Pose[2]
+
+        TimeDiff = time.time() - lastFrameTime
+        EncoderDiff = Encode - PrevEncode
+        EncoderDisp = EncoderDiff * TRANSMISSION
+        WheelVel = EncoderDisp / TimeDiff
+        TVelocity = 0.5 * (WheelVel[0] + WheelVel[1])
+        
+        GuessX = PrevX + TVelocity * np.cos(np.deg2rad(PrevTheta))
+        GuessY = PrevY + TVelocity * np.sin(np.deg2rad(PrevTheta))
+        GuessTheta = PrevTheta + (((WheelVel[0] - WheelVel[1]) / WIDTH) * TimeDiff)
+        
+        Pose = [GuessX, GuessY, GuessTheta]
+        CurrPose = Pose
+    elif not Pose == CurrPose:
+        loceOutputState = 'New'
+        CurrPose = Pose
+    else:
+        loceOutputState = 'Error'
+        Pose = [0, 0, 0]
+    
+    PrevEncode = Encode
+    PrevTheta = Pose[2]
+    lastFrameTime = time.time()
+
+    if(SHOW_LOCALIZER_COMMANDS):
+        print(f"Pose Type: {loceOutputState}, Pose: {Pose}")
+
+    return Pose
 
 def DriveToWall(velocity):
     pose = GetPose();
