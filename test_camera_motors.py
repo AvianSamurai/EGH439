@@ -2,10 +2,13 @@ import argparse
 import time
 import cv2
 from pibot_client import PiBot
+import numpy as np
+
+print(f"{(np.array([3, 4]) - np.array([1, 2]))}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PiBot client')
-    parser.add_argument('--ip', type=str, default='172.19.232.146', help='IP address of PiBot')
+    parser.add_argument('--ip', type=str, default='192.168.50.5', help='IP address of PiBot')
     args = parser.parse_args()
 
     bot = PiBot(ip=args.ip)
@@ -17,11 +20,12 @@ if __name__ == "__main__":
     print(f"get encoders state at beginning: {enc_begin_left}, {enc_begin_right}")
 
     print("speed test");
-    index = 0;
-    while(True):
-        bot.setVelocity(100, 100, 1);
-        print(f"{index} commands sent")
-        index += 1;
+    enc1 = bot.getEncoders()
+    bot.setVelocity(10, 0, 3.8);
+    enc2 = bot.getEncoders();
+    print(f"encoder diff: {enc2[0] - enc1[0]}, {enc2[1] - enc1[1]}")
+
+    time.sleep(60*60)
 
     print("test left motor")
     bot.setVelocity(10,0)

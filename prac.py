@@ -29,6 +29,8 @@ FIGURE_8_TIME = 20;
 # Robot Properties
 WHEEL_RADIUS = 65.7/2 # mm
 WIDTH = 150/1000 # m
+ENCODER_RANGE = 377;
+ENCODER_TICK_DIST = (WHEEL_RADIUS * 2 * np.pi) / 377
 M_PER_1_PER_S = 5.35/1000;
 
 # Pose Based Settings
