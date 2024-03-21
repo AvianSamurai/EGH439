@@ -17,7 +17,7 @@ LOCALIZER_NUM = 2;
 # Run Type
 # 0 = Line
 # 1 = Figure 8
-RUN_TYPE = 1;
+RUN_TYPE = 0;
 FIGURE_8_TIME = 10;
 
 # Robot Properties
@@ -32,7 +32,7 @@ K_P = 0.25;
 K_TOTAL = 1.5;
 
 # Pure Persuit Settings
-USE_PURE_PURSUIT = True;
+USE_PURE_PURSUIT = (RUN_TYPE == 1);
 USE_POSE_BASED_FOR_FIRST_WP = True;
 K_TURN_GAIN = 5;
 PURE_PURSUIT_V = 1;
@@ -412,7 +412,9 @@ if __name__ == "__main__":
     if(itterations >= RUN_COUNT):
         print("Itteration limit reached, ending early")
 
+    print("Driving to wall");
     DriveToWall(0.5);
+    print("Done");
 
     if(USE_SPEACH):
         speak.Speak(randLine(completeSpeak));
