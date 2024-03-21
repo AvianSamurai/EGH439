@@ -1,17 +1,20 @@
 import argparse
 import time
 import cv2
+import subprocess, sys
 import random
 import numpy as np
 import matplotlib.pyplot as plt
 from pibot_client import PiBot
 from runner import Runner
 import win32com.client as wincom
+import os
 
 # [===============================[ SETTINGS ]==================================]
 # Connection settings
 IP = "172.19.232.146"
 USE_LOCALIZER = False;
+USE_TRACKER = True;
 LOCALIZER_NUM = 2;
 
 # Run Type
@@ -346,6 +349,7 @@ if __name__ == "__main__":
 
     # Forge an unbreakable connection
     if(USE_LOCALIZER):
+        if USE_TRACKER: subprocess.Popen(f"cmd /c python LiveTrack2.py --localizer {LOCALIZER_NUM} --IP {IP}", cwd=os.getcwd(), shell=True);
         print("Connecting to the bot\n")
         bot = PiBot(ip=IP, localiser_ip=f'egb439localiser{LOCALIZER_NUM}')
     else:

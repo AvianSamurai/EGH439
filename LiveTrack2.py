@@ -3,9 +3,15 @@
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from pibot_client import PiBot
+import argparse
 
-IP = "172.19.232.146"
-LOCALIZER_NUM = 2;
+parser = argparse.ArgumentParser(description='Live Tracker')
+parser.add_argument('--localizer', type=str, default=1, help='Localizer Number')
+parser.add_argument('--IP', type=str, default="172.19.232.146", help='Bot IP Address')
+args = parser.parse_args()
+
+IP = args.IP;
+LOCALIZER_NUM = args.localizer;
 
 # Create figure for plotting
 fig = plt.figure()
