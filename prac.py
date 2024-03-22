@@ -12,16 +12,17 @@ import os
 
 # [===============================[ SETTINGS ]==================================]
 # Connection settings
-IP = "172.19.232.146"
-USE_LOCALIZER = True;
+IP = "192.168.50.5"
+USE_LOCALIZER = False;
 USE_TRACKER = False;
+DO_ROBOT_IN_SIM = True;
 LOCALIZER_NUM = 2;
 
 # Run Type
 # 0 = Line
 # 1 = Figure 8
-RUN_TYPE = 1;
-FIGURE_8_TIME = 20;
+RUN_TYPE = 0;
+FIGURE_8_TIME = 10;
 
 # Robot Properties
 WHEEL_RADIUS = 65.7/2 # mm
@@ -49,10 +50,10 @@ MIN_LIM = 0.15;
 MAX_LIM = 1.85;
 
 # Debug Settings
-RUN_COUNT = 2500; # 0 for off
+RUN_COUNT = 500; # 0 for off
 SHOW_DEBUG_GRAPH = True;
-SHOW_MOTOR_COMMANDS = False;
-USE_SPEACH = True;
+SHOW_MOTOR_COMMANDS = True;
+USE_SPEACH = False;
 
 # Debug variables
 past_positions_x = [];
@@ -128,10 +129,12 @@ def drive(speed, turn_rate):
     right_wheel = round(right_wheel) 
 
     if(USE_LOCALIZER):
-        bot.setVelocity(motor_left=min(max(left_wheel, -100), 100), motor_right=min(max(right_wheel, -100), 100), duration=10, acceleration_time=None);
+        bot.setVelocity(motor_left=min(max(left_wheel, -100), 100), motor_right=min(max(right_wheel, -100), 100), duration=None, acceleration_time=None);
     else:
         visualizer.setVelocity(min(max(left_wheel, -100), 100), min(max(right_wheel, -100), 100), 0.1);
-    time.sleep(0.01);
+        if(DO_ROBOT_IN_SIM):
+            bot.setVelocity(motor_left=min(max(left_wheel, -100), 100), motor_right=min(max(right_wheel, -100), 100), duration=None, acceleration_time=None);
+        time.sleep(0.1);
 
 def GetPoints():
     ##get robot pose
@@ -359,6 +362,7 @@ if __name__ == "__main__":
     else:
         visualizer = Runner();
         visualizer.randomizeStartingPose();
+        bot = PiBot(ip=IP)
         print("Connecting to the bot without localizer\n")
 
     # Make sure the connection exists and that its not lieing to me
