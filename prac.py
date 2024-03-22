@@ -12,8 +12,9 @@ import os
 
 # [===============================[ SETTINGS ]==================================]
 # Connection settings
-IP = "172.19.232.146"
+IP = "192.168.50.5"
 USE_LOCALIZER = False;
+FAKE_LOCALIZER = True;
 USE_TRACKER = False;
 LOCALIZER_NUM = 1;
 
@@ -27,7 +28,7 @@ RUN_TYPE = 0;
 FIGURE_8_TIME = 20;
 
 # Robot Properties
-WHEEL_RADIUS = 65.7/2 # mm
+WHEEL_RADIUS = 65.7/2/1000 # mm
 WIDTH = 150/1000 # m
 ENCODER_RANGE = 377;
 ENCODER_TICK_DIST = (WHEEL_RADIUS * 2 * np.pi) / 377
@@ -57,9 +58,9 @@ MIN_LIM = 0.15;
 MAX_LIM = 1.85;
 
 # Debug Settings
-RUN_COUNT = 200; # 0 for off
+RUN_COUNT = 10; # 0 for off
 SHOW_DEBUG_GRAPH = True;
-SHOW_MOTOR_COMMANDS = False;
+SHOW_MOTOR_COMMANDS = True;
 SHOW_LOCALIZER_COMMANDS = True;
 USE_SPEACH = False;
 
@@ -136,7 +137,7 @@ def drive(speed, turn_rate):
     left_wheel = round(left_wheel);
     right_wheel = round(right_wheel) 
 
-    if(USE_LOCALIZER):
+    if(USE_LOCALIZER or FAKE_LOCALIZER):
         bot.setVelocity(motor_left=min(max(left_wheel, -100), 100), motor_right=min(max(right_wheel, -100), 100), duration=None, acceleration_time=None);
     else:
         visualizer.setVelocity(min(max(left_wheel, -100), 100), min(max(right_wheel, -100), 100), SIMULATION_TIMESTEP);
@@ -144,7 +145,7 @@ def drive(speed, turn_rate):
 
 def GetPoints():
     ##get robot pose
-    pose = bot.getLocalizerPose(5) if USE_LOCALIZER else visualizer.getPose();
+    pose = GetPose();
     RobX, RobY, = pose[0], pose[1]
 
     ##Rearrange the equation in the form ax + by + c = 0
@@ -299,17 +300,29 @@ def StartRun():
     start_time = time.time();
     last_pose = GetPose();
 
+def GetRandomPose():
+    pose = [0, 0, 0];
+    pose[0] = random.uniform(0.2, 1.8);
+    pose[1] = random.uniform(0.2, 1.8);
+    pose[2] = random.uniform(-180, 180);
+    return pose;
+
 PrevEncode = np.array([0, 0])
 lastFrameTime = time.time();
-CurrPose = [0, 0, 0];
+CurrPose = [0, 0, 0] if not FAKE_LOCALIZER else GetRandomPose();
 PrevTheta = 0;
+firstFrame = True;
 
 def GetPose():
-    if not USE_LOCALIZER: return visualizer.getPose();
+    global CurrPose, start_time, PrevEncode, PrevTheta, lastFrameTime, firstFrame
+
+    if not (USE_LOCALIZER or FAKE_LOCALIZER): return visualizer.getPose();
+
+    if firstFrame:
+        PrevEncode = np.asarray(bot.getEncoders())
+        firstFrame = False;
     
-    global CurrPose, start_time, PrevEncode, PrevTheta, lastFrameTime
-    
-    Pose = bot.getLocalizerPose(9)
+    Pose = bot.getLocalizerPose(9) if not FAKE_LOCALIZER else CurrPose;
     Encode = np.asarray(bot.getEncoders())
     
     if Pose == CurrPose:
@@ -319,14 +332,17 @@ def GetPose():
         PrevTheta = Pose[2]
 
         TimeDiff = time.time() - lastFrameTime
+        lastFrameTime = time.time()
+
         EncoderDiff = Encode - PrevEncode
         EncoderDisp = EncoderDiff * TRANSMISSION
         WheelVel = EncoderDisp / TimeDiff
         TVelocity = 0.5 * (WheelVel[0] + WheelVel[1])
+        print(f"vel: {TVelocity} Time: {TimeDiff}")
         
         GuessX = PrevX + TVelocity * np.cos(np.deg2rad(PrevTheta))
         GuessY = PrevY + TVelocity * np.sin(np.deg2rad(PrevTheta))
-        GuessTheta = PrevTheta + (((WheelVel[0] - WheelVel[1]) / WIDTH) * TimeDiff)
+        GuessTheta = PrevTheta + np.rad2deg((((WheelVel[0] - WheelVel[1]) / WIDTH) * TimeDiff))
         
         Pose = [GuessX, GuessY, GuessTheta]
         CurrPose = Pose
@@ -339,12 +355,13 @@ def GetPose():
     
     PrevEncode = Encode
     PrevTheta = Pose[2]
-    lastFrameTime = time.time()
+
+    finalTheta = ((((np.deg2rad(Pose[2]) * 180) / np.pi) + 180) % 360) - 180
 
     if(SHOW_LOCALIZER_COMMANDS):
-        print(f"Pose Type: {loceOutputState}, Pose: {Pose}")
+        print(f"Pose Type: {loceOutputState}, Pose: {Pose}, FinalDeg: {finalTheta}")
 
-    return Pose
+    return [Pose[0], Pose[1], finalTheta]
 
 def DriveToWall(velocity):
     pose = GetPose();
@@ -446,13 +463,17 @@ if __name__ == "__main__":
         if USE_TRACKER: subprocess.Popen(f"cmd /c python LiveTrack2.py --localizer {LOCALIZER_NUM} --IP {IP}", cwd=os.getcwd(), shell=True);
         print("Connecting to the bot\n")
         bot = PiBot(ip=IP, localiser_ip=f'egb439localiser{LOCALIZER_NUM}')
+        bot.setVelocity(motor_left=0, motor_right=0, duration=None, acceleration_time=None)
+    elif FAKE_LOCALIZER:
+            bot = PiBot(ip=IP)
+            bot.setVelocity(motor_left=0, motor_right=0, duration=None, acceleration_time=None)
     else:
         visualizer = Runner();
         visualizer.randomizeStartingPose();
         print("Connecting to the bot without localizer\n")
 
     # Make sure the connection exists and that its not lieing to me
-    if(USE_LOCALIZER):
+    if(USE_LOCALIZER or FAKE_LOCALIZER):
         print("Running tests")
         print(f'\tVoltage: {bot.getVoltage():.2f}V')
         print(f'\tCurrent: {bot.getCurrent():.2f}A')
@@ -522,7 +543,7 @@ if __name__ == "__main__":
         speak.Speak(randLine(completeSpeak));
     
     # Stop the wheels from moving afterwards
-    if(USE_LOCALIZER):
+    if(USE_LOCALIZER or FAKE_LOCALIZER):
         bot.setVelocity(motor_left=0, motor_right=0, duration=None, acceleration_time=None)
 
     ShowStats();

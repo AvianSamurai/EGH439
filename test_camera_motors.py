@@ -20,15 +20,16 @@ if __name__ == "__main__":
     print(f"get encoders state at beginning: {enc_begin_left}, {enc_begin_right}")
 
     print("speed test");
-    enc1 = bot.getEncoders()
-    bot.setVelocity(10, 0, 3.8);
-    enc2 = bot.getEncoders();
-    print(f"encoder diff: {enc2[0] - enc1[0]}, {enc2[1] - enc1[1]}")
+    val = bot.getEncoders()[0];
+    bot.setVelocity(75,0, 0.375)
+    print(f"encoder diff: {bot.getEncoders()[0] - val}")
+    print(f"rots: {(bot.getEncoders()[0] - val) / 100}")
+    bot.setVelocity(0,0, None)
 
     time.sleep(60*60)
 
-    print("test left motor")
-    bot.setVelocity(10,0)
+    
+
     time.sleep(2)
 
     print("test right motor")
