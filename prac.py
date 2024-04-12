@@ -2,6 +2,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 from pibrait_client import PiBrait
+import msvcrt as asyncKeyManager;
 
 # [===============================[ SETTINGS ]==================================]
 # Connection settings
@@ -16,8 +17,9 @@ TRANSMISSION = np.array([ENCODER_TICK_DIST, ENCODER_TICK_DIST])
 M_PER_1_PER_S = 5.35/1000;
 
 # Berger Settings
-K_LEFT = 1;
-K_RIGHT = 1;
+K_LEFT = 30;
+K_RIGHT = 30;
+DRIVE_SPEED = 50;
 STOP_VALUE = 0.85;
 
 # Debug Settings
@@ -113,10 +115,25 @@ def ShowStats():
 def BurgCode(): # Dies on true return
     pollen_sensors = bot.sense();
 
+    # Check for end condition
+    if(pollen_sensors[0] > STOP_VALUE or pollen_sensors[1] > STOP_VALUE):
+        drive(0, 0);
+        print("===[ Arrived! ]==============================");
+        return True;
+
+    # Calculate individual wheel speeds
     left_speed = pollen_sensors[1] * K_LEFT;
     right_speed = pollen_sensors[0] * K_RIGHT;
-    
+
+    # adjust wheel speeds 
+    adv_speed = (1/2)*(left_speed+right_speed);
+    speed_addjustment = DRIVE_SPEED / adv_speed;
+    left_speed = left_speed*speed_addjustment;
+    right_speed = right_speed*speed_addjustment;
+
+    # Drive
     drive(left_speed, right_speed);
+
     return False;
 
 if __name__ == "__main__":
@@ -136,5 +153,9 @@ if __name__ == "__main__":
 
     while(not BurgCode()): # Dies when BurgCode returns false
         print(f"\t time: {time.time() - start_time}", end="\n\n");
+        if(asyncKeyManager.kbhit() and asyncKeyManager.getch() == "s"):
+            drive(0, 0);
+            print("=============================================\n\t\t\t!!! ESTOP TRIGGERED !!!\n=============================================")
+            break;
 
     ShowStats();
