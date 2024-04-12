@@ -15,6 +15,11 @@ ENCODER_TICK_DIST = (WHEEL_RADIUS * 2 * np.pi) / 377
 TRANSMISSION = np.array([ENCODER_TICK_DIST, ENCODER_TICK_DIST])
 M_PER_1_PER_S = 5.35/1000;
 
+# Berger Settings
+K_LEFT = 1;
+K_RIGHT = 1;
+STOP_VALUE = 0.85;
+
 # Debug Settings
 SHOW_DEBUG_GRAPH = True;
 SHOW_MOTOR_COMMANDS = True;
@@ -43,6 +48,8 @@ def drive(v_left, v_right):
     
     left_wheel = round(left_wheel);
     right_wheel = round(right_wheel);
+
+    bot.setVelocity(left_wheel, right_wheel)
     
     if(SHOW_DEBUG_GRAPH):
         left_wheel_speeds.append(left_wheel);
@@ -104,6 +111,12 @@ def ShowStats():
         plt.show();
 
 def BurgCode(): # Dies on true return
+    pollen_sensors = bot.sense();
+
+    left_speed = pollen_sensors[1] * K_LEFT;
+    right_speed = pollen_sensors[0] * K_RIGHT;
+    
+    drive(left_speed, right_speed);
     return False;
 
 if __name__ == "__main__":
