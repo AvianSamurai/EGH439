@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pibot_client import PiBot
 from runner import Runner
+import pather
 
 # [===============================[ SETTINGS ]==================================]
 # Connection settings
@@ -40,55 +41,19 @@ turn_rate_graph = [];
 # [===============================[ METHODS ]==================================]
 
 def GetPoints():
-    ##get robot pose
-    pose = bot.getLocalizerPose(5) if USE_LOCALIZER else visualizer.getPose();
-    RobX, RobY, = pose[0], pose[1]
+    pose = bot.getLocalizerPose(9) if USE_LOCALIZER else visualizer.getPose();
 
-    ##Rearrange the equation in the form ax + by + c = 0
-    a = -1
-    b = 1
-    c = 0.001
-    x = np.linspace(0, 2, 1000)
-    y = (-a * x - c) / b
+    new_pose = [int(((pose[1] / 2) - 0.5) * 100), int(((pose[0] / 2) - 0.5) * 100)]
+    new_pose = [new_pose[0] * -1, new_pose[1]];
 
+    print(f"pose: {pose[0]},{pose[1]}")
+    print(f"new_pose: {new_pose[1]},{new_pose[0]}")
 
-    ##plot line
-    fig1 = plt.figure()
-    plt.axis([0, 2, 0, 2])
-    plt.plot(x, y, linestyle = '-')
-
-    ##plot robto
-    plt.plot(RobX,RobY,'ro') 
-    #plt.show
-
-    ##find closest point
-    ClosestX = (b * (b * RobX - a * RobY) - a * c) / (a**2 + b**2)
-    ClosestY = (a * (-b * RobX + a * RobY) - b * c) / (a**2 + b**2)
-    ClosestPoint = ClosestX, ClosestY
-
-    plt.plot(ClosestX, ClosestY,'go') 
-    #plt.show()
-
-    ##find end point
-    if ClosestX < 1:
-        #EndPoint = 2, ((-a * 2 - c) / b)
-        EndPoint = 2, 2
-    else:
-        #
-        EndPoint = 0.01, 0.01
-
-    plt.plot(EndPoint[0], EndPoint[1],'bo') 
-    #plt.show()
-
-    PathX = np.linspace(ClosestX, EndPoint[0], 8)
-    PathY = np.linspace(ClosestY, EndPoint[1], 8)
-    PathX = PathX[2:7]
-    PathY = PathY[2:7]
-
-    plt.plot(PathX, PathY,'o') 
-    plt.show()
-
-    return (PathX, PathY)
+    (path_x, path_y) = pather.Run(new_pose);
+    path_x = (path_x / 100) * 2;
+    path_y = (path_y / 100) * 2;
+    path_y = (-1 * path_y + 2);
+    return (path_x, path_y)
 
 def GoToPosition(x, y, t):
     # Get the post of the robot, if the localizer isn't running, that just make
