@@ -6,7 +6,8 @@ import msvcrt as asyncKeyManager;
 
 # [===============================[ SETTINGS ]==================================]
 # Connection settings
-IP = "192.168.50.5"
+IP = "172.19.232.146"
+LOCALIZER_NUM = 2;
 
 # Robot Properties
 WHEEL_RADIUS = 65.7/2/1000 # mm
@@ -17,20 +18,20 @@ TRANSMISSION = np.array([ENCODER_TICK_DIST, ENCODER_TICK_DIST])
 M_PER_1_PER_S = 5.35/1000;
 
 # Berger Settings
-K_LEFT = 30;
-K_RIGHT = 30;
-DRIVE_SPEED = 50;
-STOP_VALUE = 0.85;
+K_LEFT = 60;
+K_RIGHT = 60;
+DRIVE_SPEED = 1;
+STOP_VALUE = 0.95;
 
 # Debug Settings
 SHOW_DEBUG_GRAPH = True;
 SHOW_MOTOR_COMMANDS = True;
 
 # Debug variables
-velocity_graph = [];
-turn_rate_graph = [];
+pollen_history = [];
 left_wheel_speeds = [];
 right_wheel_speeds = [];
+
 
 # [===============================[ METHODS ]==================================]
 
@@ -70,13 +71,7 @@ def RecordDebugData(pose, steering_angle):
     global last_time, start_time;
 
     if(SHOW_DEBUG_GRAPH):
-        turn_rate_graph.append(steering_angle);
-
-        pose_dist = np.sqrt((pose[0] - last_pose[0])**2 + (pose[1] - last_pose[1])**2);
-        last_pose = pose;
-        delta_t = time.time() - last_time;
-        last_time = time.time();
-        velocity_graph.append(pose_dist / delta_t);
+        pollen_history.append(bot.sense());
 
 def StartRun():
     global last_time, start_time;
@@ -93,43 +88,39 @@ def ShowStats():
     if(SHOW_DEBUG_GRAPH):
         fig0, ax0 = plt.subplots(2,2);
         # Map Plot
-        ax0[0,0].set_title(f'Unused Space');
-        ax0[0,0].text(1, 1, f"This space is intentionally left blank");
-    
-        # Turnrate Plot
-        ax0[1,0].plot(turn_rate_graph);
-        ax0[1,0].set_title("Turn rate over time")
+        ax0[0,0].set_title(f'Pollen');
+        ax0[0,0].plot(pollen_history);
 
-        # velocity plot
-        ax0[0,1].plot(velocity_graph);
-        avg_velocity = np.mean(velocity_graph);
-        ax0[0,1].set_title(f"Velocity over time, Mean: {round(avg_velocity,3)}");
-
-        ax0[1,1].plot(left_wheel_speeds);
-        ax0[1,1].plot(right_wheel_speeds);
-        ax0[1,1].legend(["Left Wheel", "Right Wheel"]);
-        ax0[1,1].set_title("Wheel Speeds");
+        ax0[1,0].plot(left_wheel_speeds);
+        ax0[1,0].plot(right_wheel_speeds);
+        ax0[1,0].legend(["Left Wheel", "Right Wheel"]);
+        ax0[1,0].set_title("Wheel Speeds");
 
         plt.show();
 
 def BurgCode(): # Dies on true return
     pollen_sensors = bot.sense();
+    print(f"SENSE {pollen_sensors}\n")
 
     # Check for end condition
-    if(pollen_sensors[0] > STOP_VALUE or pollen_sensors[1] > STOP_VALUE):
+    if(pollen_sensors[0] > STOP_VALUE and pollen_sensors[1] > STOP_VALUE):
         drive(0, 0);
         print("===[ Arrived! ]==============================");
         return True;
 
+    # Works but wavy
+    #left_speed = (1 if pollen_sensors[1] > pollen_sensors[0] else 0.2) * K_LEFT;
+    #right_speed = (1 if pollen_sensors[0] > pollen_sensors[1] else 0.2) * K_RIGHT;
+
     # Calculate individual wheel speeds
-    left_speed = pollen_sensors[1] * K_LEFT;
-    right_speed = pollen_sensors[0] * K_RIGHT;
+    left_speed = (1 - pollen_sensors[0]) * K_LEFT + DRIVE_SPEED;
+    right_speed = (1 - pollen_sensors[1]) * K_RIGHT + DRIVE_SPEED;
 
     # adjust wheel speeds 
-    adv_speed = (1/2)*(left_speed+right_speed);
-    speed_addjustment = DRIVE_SPEED / adv_speed;
-    left_speed = left_speed*speed_addjustment;
-    right_speed = right_speed*speed_addjustment;
+    # adv_speed = (1/2)*(left_speed+right_speed);
+    # speed_addjustment = DRIVE_SPEED / adv_speed;
+    #left_speed = left_speed#*speed_addjustment;
+    #right_speed = right_speed#*speed_addjustment;
 
     # Drive
     drive(left_speed, right_speed);
@@ -140,7 +131,7 @@ if __name__ == "__main__":
 
     # Forge an unbreakable connection
     print(" > Connecting to robot ", end="")
-    bot = PiBrait(ip=IP)
+    bot = PiBrait(ip=IP, localiser_ip=f'egb439localiser{LOCALIZER_NUM}')
     print("[CONNECTED]", end="\n\n")
 
     # Make sure the connection exists and that its not lieing to me
